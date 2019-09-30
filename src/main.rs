@@ -2,36 +2,41 @@
 extern crate diesel;
 extern crate dotenv;
 
+#[macro_use]
 mod db;
 mod routes;
 
-use self::db::{create_user, establish_connection};
-use actix_web::{web, App, HttpServer};
+use actix_web::{middleware, web, App, HttpServer};
+use db::{create_user, establish_connection_pool};
 use dotenv::dotenv;
 use listenfd::ListenFd;
-use routes::{index, index3, AppState};
+use routes::{index, index3};
 use std::env;
 
-fn main() {
+fn get_server_url() -> String {
     dotenv().ok();
-    let server_port = env::var("SERVER_PORT").unwrap_or(String::from("8080"));
-    let server_url = format!("127.0.0.1:{}", server_port);
+    let server_port = env::var("SERVER_PORT").unwrap_or("8080".to_string());
+    let domain: String = env::var("DOMAIN").unwrap_or_else(|_| "localhost".to_string());
+    format!("{}:{}", domain, server_port)
+}
 
-    create_new_user();
+fn main() {
+    env::set_var("RUST_LOG", "actix_web=info,actix_server=info");
+    env_logger::init();
 
-    let mut listenfd = ListenFd::from_env(); // <- Used for live reloading
+    let pool = establish_connection_pool(); // Create Database connection pool
+    let mut listenfd = ListenFd::from_env(); // Used for live reloading
     let mut server = HttpServer::new(|| {
         App::new()
-            .data(AppState {
-                app_name: String::from("Actix Web"),
-            })
+            .data(pool.clone())
+            .wrap(middleware::Logger::default())
             .route("/", web::get().to(index))
             .service(index3)
     });
     server = if let Some(listener) = listenfd.take_tcp_listener(0).unwrap() {
         server.listen(listener).unwrap()
     } else {
-        server.bind(server_url).unwrap()
+        server.bind(get_server_url()).unwrap()
     };
     server.run().unwrap();
 }

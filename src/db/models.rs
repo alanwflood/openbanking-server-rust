@@ -1,10 +1,11 @@
+#![allow(dead_code)]
 use super::schema::users;
 
 #[derive(Queryable)]
 pub struct User {
     pub id: i32,
     pub email: String,
-    // password: String,
+    password: String,
     pub first_name: String,
     pub last_name: String,
     // pub yaily_id: String,

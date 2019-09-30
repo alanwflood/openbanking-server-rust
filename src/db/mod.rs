@@ -1,18 +1,25 @@
 use self::models::{NewUser, User};
-use diesel::pg::PgConnection;
 use diesel::prelude::*;
 use dotenv::dotenv;
 use std::env;
 
-#[macro_use]
 pub mod models;
-#[macro_use]
 pub mod schema;
 
-pub fn establish_connection() -> PgConnection {
+use diesel::{
+    r2d2::{self, ConnectionManager},
+    PgConnection,
+};
+
+pub type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
+
+pub fn establish_connection_pool() -> Pool {
     dotenv().ok();
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    PgConnection::establish(&database_url).expect(&format!("Error connecting to {}", database_url))
+    let manager = ConnectionManager::<PgConnection>::new(database_url);
+    r2d2::Pool::builder()
+        .build(manager)
+        .expect("Failed to create pool")
 }
 
 pub fn create_user<'a>(
