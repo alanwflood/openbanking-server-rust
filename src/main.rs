@@ -1,31 +1,29 @@
-use actix_web::{get, web, App, HttpResponse, HttpServer, Responder};
+mod routes;
 
-#[get("/")]
-fn index3() -> impl Responder {
-    HttpResponse::Ok().body("Hey there!")
-}
-
-struct AppState {
-    app_name: String,
-}
-
-fn index(data: web::Data<AppState>) -> String {
-    let app_name = &data.app_name; // <- get app_name
-
-    format!("Hello {}!", app_name) // <- response with app_name
-}
+use actix_web::{ web, App, HttpServer};
+use dotenv::dotenv;
+use listenfd::ListenFd;
+use routes::{index3, index, AppState};
+use std::env;
 
 fn main() {
-    HttpServer::new(|| {
+    dotenv().ok();
+    let server_port = env::var("SERVER_PORT").unwrap_or(String::from("8080"));
+    let server_url = format!("127.0.0.1:{}", server_port);
+
+    let mut listenfd = ListenFd::from_env(); // <- Used for live reloading
+    let mut server = HttpServer::new(|| {
         App::new()
             .data(AppState {
                 app_name: String::from("Actix Web"),
             })
             .route("/", web::get().to(index))
             .service(index3)
-    })
-    .bind("127.0.0.1:8088")
-    .unwrap()
-    .run()
-    .unwrap();
+    });
+    server = if let Some(listener) = listenfd.take_tcp_listener(0).unwrap() {
+        server.listen(listener).unwrap()
+    } else {
+        server.bind(server_url).unwrap()
+    };
+    server.run().unwrap();
 }
