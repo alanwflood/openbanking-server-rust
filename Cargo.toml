@@ -1,5 +1,5 @@
 [package]
-name = "sumi-backend"
+name = "sumi"
 version = "0.1.0"
 authors = ["Alan Flood <alanwflood.tech@gmail.com>"]
 edition = "2018"

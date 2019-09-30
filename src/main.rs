@@ -1,15 +1,23 @@
+#[macro_use]
+extern crate diesel;
+extern crate dotenv;
+
+mod db;
 mod routes;
 
-use actix_web::{ web, App, HttpServer};
+use self::db::{create_user, establish_connection};
+use actix_web::{web, App, HttpServer};
 use dotenv::dotenv;
 use listenfd::ListenFd;
-use routes::{index3, index, AppState};
+use routes::{index, index3, AppState};
 use std::env;
 
 fn main() {
     dotenv().ok();
     let server_port = env::var("SERVER_PORT").unwrap_or(String::from("8080"));
     let server_url = format!("127.0.0.1:{}", server_port);
+
+    create_new_user();
 
     let mut listenfd = ListenFd::from_env(); // <- Used for live reloading
     let mut server = HttpServer::new(|| {
@@ -26,4 +34,9 @@ fn main() {
         server.bind(server_url).unwrap()
     };
     server.run().unwrap();
+}
+
+fn create_new_user() {
+    let conn = establish_connection();
+    create_user(&conn, "alanwflood@gmail.com", "fluffykins", "Alan", "Flood");
 }
