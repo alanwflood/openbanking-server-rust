@@ -7,10 +7,9 @@ mod db;
 mod routes;
 
 use actix_web::{middleware, web, App, HttpServer};
-use db::{create_user, establish_connection_pool};
+use db::establish_connection_pool;
 use dotenv::dotenv;
 use listenfd::ListenFd;
-use routes::{index, index3};
 use std::env;
 
 fn get_server_url() -> String {
@@ -26,12 +25,12 @@ fn main() {
 
     let pool = establish_connection_pool(); // Create Database connection pool
     let mut listenfd = ListenFd::from_env(); // Used for live reloading
-    let mut server = HttpServer::new(|| {
+    let mut server = HttpServer::new(move || {
         App::new()
             .data(pool.clone())
             .wrap(middleware::Logger::default())
-            .route("/", web::get().to(index))
-            .service(index3)
+            .data(web::JsonConfig::default().limit(4096))
+            .service(routes::index)
     });
     server = if let Some(listener) = listenfd.take_tcp_listener(0).unwrap() {
         server.listen(listener).unwrap()
@@ -39,9 +38,4 @@ fn main() {
         server.bind(get_server_url()).unwrap()
     };
     server.run().unwrap();
-}
-
-fn create_new_user() {
-    let conn = establish_connection();
-    create_user(&conn, "alanwflood@gmail.com", "fluffykins", "Alan", "Flood");
 }

@@ -1,15 +1,16 @@
-use self::models::{NewUser, User};
-use diesel::prelude::*;
+use self::models::User;
+use actix_web::web;
+use diesel::{
+    prelude::*,
+    r2d2::{self, ConnectionManager},
+    PgConnection,
+};
 use dotenv::dotenv;
+use serde_derive::Deserialize;
 use std::env;
 
 pub mod models;
 pub mod schema;
-
-use diesel::{
-    r2d2::{self, ConnectionManager},
-    PgConnection,
-};
 
 pub type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
 
@@ -22,24 +23,24 @@ pub fn establish_connection_pool() -> Pool {
         .expect("Failed to create pool")
 }
 
-pub fn create_user<'a>(
-    conn: &PgConnection,
-    email: &'a str,
-    password: &'a str,
-    first_name: &'a str,
-    last_name: &'a str,
-) -> User {
-    use self::schema::users;
+#[derive(Deserialize)]
+pub struct UserData {
+    pub email: String,
+    pub password: String,
+    pub first_name: String,
+    pub last_name: String,
+}
 
-    let new_user = NewUser {
-        email: email,
-        password: password,
-        first_name: first_name,
-        last_name: last_name,
-    };
+pub fn create_user<'a>(
+    user_data: UserData,
+    pool: web::Data<Pool>,
+) -> Result<User, diesel::result::Error> {
+    use self::schema::users;
+    let conn = &pool.get().unwrap();
+    let user = User::from_user_data(user_data);
 
     diesel::insert_into(users::table)
-        .values(&new_user)
-        .get_result(conn)
-        .expect("Error creating new user")
+        .values(&user)
+        .execute(conn)?;
+    Ok(user)
 }

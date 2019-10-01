@@ -1,9 +1,10 @@
 table! {
     users (id) {
-        id -> Int4,
+        id -> Uuid,
         email -> Varchar,
-        password -> Varchar,
+        hash -> Varchar,
         first_name -> Varchar,
         last_name -> Varchar,
+        created_at -> Timestamp,
     }
 }

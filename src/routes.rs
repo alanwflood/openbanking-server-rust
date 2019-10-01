@@ -1,15 +1,14 @@
-use actix_web::{get, web, HttpResponse, Responder};
+use crate::db::{create_user, Pool, UserData};
+use actix_web::{post, web, Error, HttpResponse};
+use futures::Future;
 
-#[get("/")]
-pub fn index3() -> impl Responder {
-    HttpResponse::Ok().body("Hey there!")
-}
-
-pub struct AppState {
-    pub app_name: String,
-}
-
-pub fn index(data: web::Data<AppState>) -> String {
-    let app_name = &data.app_name; // <- get app_name
-    format!("Hello {}!", app_name) // <- response with app_name
+#[post("/")]
+pub fn index(
+    payload: web::Json<UserData>,
+    pool: web::Data<Pool>,
+) -> impl Future<Item = HttpResponse, Error = Error> {
+    web::block(move || create_user(payload.into_inner(), pool)).then(|res| match res {
+        Ok(user) => Ok(HttpResponse::Ok().json(user)),
+        Err(_) => Ok(HttpResponse::InternalServerError().into()),
+    })
 }
