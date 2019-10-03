@@ -1,4 +1,5 @@
-use self::models::User;
+use self::models::{verify_password, User};
+use crate::errors::ServiceError;
 use actix_web::web;
 use diesel::{
     prelude::*,
@@ -14,6 +15,7 @@ pub mod schema;
 
 pub type Pool = r2d2::Pool<ConnectionManager<PgConnection>>;
 
+// Setup Database Pooling
 pub fn establish_connection_pool() -> Pool {
     dotenv().ok();
     let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
@@ -23,6 +25,7 @@ pub fn establish_connection_pool() -> Pool {
         .expect("Failed to create pool")
 }
 
+// JSON Payload shape for User Registration
 #[derive(Deserialize)]
 pub struct UserData {
     pub email: String,
@@ -31,7 +34,8 @@ pub struct UserData {
     pub last_name: String,
 }
 
-pub fn create_user<'a>(
+// Create user from JSON Payload
+pub fn create_user(
     user_data: UserData,
     pool: web::Data<Pool>,
 ) -> Result<User, diesel::result::Error> {
@@ -43,4 +47,27 @@ pub fn create_user<'a>(
         .values(&user)
         .execute(conn)?;
     Ok(user)
+}
+
+#[derive(Deserialize)]
+pub struct AuthData {
+    pub email: String,
+    pub password: String,
+}
+
+pub fn login_user(auth_data: AuthData, pool: web::Data<Pool>) -> Result<User, ServiceError> {
+    use self::schema::users::dsl::{email, users};
+    let conn: &PgConnection = &pool.get().unwrap();
+    let mut items = users
+        .filter(email.eq(&auth_data.email))
+        .load::<User>(conn)?;
+
+    if let Some(user) = items.pop() {
+        if let Ok(matching) = verify_password(&user.hash, &auth_data.password) {
+            if matching {
+                return Ok(user.into()); // convert into slimUser
+            }
+        }
+    }
+    Err(ServiceError::Unauthorized)
 }

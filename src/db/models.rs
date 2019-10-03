@@ -1,18 +1,37 @@
 use super::schema::*;
 use crate::db::UserData;
 
-use argonautica::Hasher;
+use actix_web::HttpResponse;
+use argonautica::{Hasher, Verifier};
 use chrono;
 use serde_derive::Serialize;
 use uuid;
 
-fn hash_password(password: &str) -> Result<String, ()> {
+lazy_static::lazy_static! {
+    pub static ref SECRET_KEY: String =
+        std::env::var("SECRET_KEY").unwrap_or_else(|_| "1234".repeat(8));
+}
+
+pub fn hash_password(password: &str) -> Result<String, HttpResponse> {
     Hasher::default()
         .with_password(password)
-        .with_secret_key("A Key")
+        .with_secret_key(SECRET_KEY.as_str())
         .hash()
         .map_err(|err| {
             dbg!(err);
+            HttpResponse::Unauthorized().json("Unauthorized")
+        })
+}
+
+pub fn verify_password(hash: &str, password: &str) -> Result<bool, HttpResponse> {
+    Verifier::default()
+        .with_hash(hash)
+        .with_password(password)
+        .with_secret_key(SECRET_KEY.as_str())
+        .verify()
+        .map_err(|err| {
+            dbg!(err);
+            HttpResponse::Unauthorized().json("Unauthorized")
         })
 }
 
@@ -21,6 +40,7 @@ fn hash_password(password: &str) -> Result<String, ()> {
 pub struct User {
     pub id: uuid::Uuid,
     pub email: String,
+    #[serde(skip_serializing)]
     pub hash: String,
     pub first_name: String,
     pub last_name: String,

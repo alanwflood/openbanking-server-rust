@@ -1,8 +1,10 @@
 #[macro_use]
 extern crate diesel;
 extern crate dotenv;
+extern crate lazy_static;
 
 #[macro_use]
+mod errors;
 mod db;
 mod routes;
 
@@ -25,13 +27,20 @@ fn main() {
 
     let pool = establish_connection_pool(); // Create Database connection pool
     let mut listenfd = ListenFd::from_env(); // Used for live reloading
+
     let mut server = HttpServer::new(move || {
         App::new()
             .data(pool.clone())
             .wrap(middleware::Logger::default())
             .data(web::JsonConfig::default().limit(4096))
-            .service(routes::index)
+            .service(
+                web::scope("/api/v1/")
+                    .service(routes::user_register)
+                    .service(routes::user_login),
+            )
     });
+
+    // The following sets up the server for live reloading (Run watch_project.sh)
     server = if let Some(listener) = listenfd.take_tcp_listener(0).unwrap() {
         server.listen(listener).unwrap()
     } else {
