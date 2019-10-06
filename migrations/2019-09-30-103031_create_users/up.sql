@@ -5,5 +5,6 @@ CREATE TABLE users (
   hash VARCHAR(122) NOT NULL, --argon2 hash
   first_name VARCHAR(50) NOT NULL,
   last_name VARCHAR(50) NOT NULL,
-  created_at TIMESTAMP NOT NULL
+  created_at TIMESTAMP NOT NULL,
+  yapily_id VARCHAR NOT NULL -- From yapily
 );

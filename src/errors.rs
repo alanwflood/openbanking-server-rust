@@ -15,7 +15,7 @@ pub enum ServiceError {
 impl fmt::Display for ServiceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &*self {
-            ServiceError::InternalServerError => write!(f, "Internal Server Errro"),
+            ServiceError::InternalServerError => write!(f, "Internal Server Error"),
             ServiceError::BadRequest(error) => write!(f, "Bad Request {}", error),
             ServiceError::Unauthorized => write!(f, "Unauthorized"),
         }

@@ -7,9 +7,11 @@ extern crate lazy_static;
 mod errors;
 mod db;
 mod routes;
+mod yapily;
 
+use crate::db::establish_connection_pool;
+use actix_redis::RedisSession;
 use actix_web::{middleware, web, App, HttpServer};
-use db::establish_connection_pool;
 use dotenv::dotenv;
 use listenfd::ListenFd;
 use std::env;
@@ -31,6 +33,7 @@ fn main() {
     let mut server = HttpServer::new(move || {
         App::new()
             .data(pool.clone())
+            .wrap(RedisSession::new("127.0.0.1:6379", &[0; 32]).cookie_name("authorization"))
             .wrap(middleware::Logger::default())
             .data(web::JsonConfig::default().limit(4096))
             .service(

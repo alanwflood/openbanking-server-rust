@@ -41,7 +41,7 @@ pub fn create_user(
 ) -> Result<User, diesel::result::Error> {
     use self::schema::users;
     let conn = &pool.get().unwrap();
-    let user = User::from_user_data(user_data);
+    let user = User::from_user_data(user_data).unwrap();
 
     diesel::insert_into(users::table)
         .values(&user)
