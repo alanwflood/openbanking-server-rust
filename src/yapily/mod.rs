@@ -1,5 +1,7 @@
+use crate::db::models::User;
 use crate::errors::ServiceError;
 use actix_web::client::Client;
+use actix_web::web;
 use base64;
 use futures::Future;
 use serde::{Deserialize, Serialize};
@@ -7,17 +9,20 @@ use std::env;
 
 static YAPILY_URL: &str = "https://api.yapily.com";
 
-pub fn get_auth_token() -> String {
-    let app_key = env::var("YAPILY_APP_KEY").unwrap_or_else(|err| "MISSING APP KEY".to_string());
-    let secret_key =
-        env::var("YAPILY_APP_SECRET").unwrap_or_else(|err| "MISSING SECRET KEY".to_string());
-    dbg!(&app_key);
-    dbg!(&secret_key);
+lazy_static::lazy_static! {
+    pub static ref AUTH_TOKEN: String = {
+        let app_key =
+            env::var("YAPILY_APP_KEY").unwrap_or_else(|err| "MISSING APP KEY".to_string());
+        let secret_key =
+            env::var("YAPILY_APP_SECRET").unwrap_or_else(|err| "MISSING SECRET KEY".to_string());
+        dbg!(&app_key);
+        dbg!(&secret_key);
 
-    format!(
-        "Basic {}",
-        base64::encode(&[app_key, ":".to_string(), secret_key].concat())
-    )
+        format!(
+            "Basic {}",
+            base64::encode(&[app_key, ":".to_string(), secret_key].concat())
+        )
+    };
 }
 
 #[derive(Debug, Serialize)]
@@ -38,41 +43,28 @@ struct CreateUserResponse {
 }
 
 pub fn create_user(
-    user_id: &uuid::Uuid,
-    user_reference_id: &String,
-) -> Result<String, ServiceError> {
-    let client = Client::default();
+    user: User,
+    client: web::Data<Client>,
+) -> impl Future<Item = String, Error = ServiceError> {
     let payload = CreateUserBody {
-        user_id: user_id.to_string(),
-        reference_id: user_reference_id.clone(),
+        user_id: user.id.to_string(),
+        reference_id: user.email.clone(),
     };
 
-    dbg!(&payload);
-
     client
-        .post(format!("{}{}", YAPILY_URL, "/users")) // <- Create request builder
-        .header("Authorization", get_auth_token())
+        .post(format!("{}{}", YAPILY_URL, "/users"))
+        .header("Authorization", AUTH_TOKEN.as_str())
         .send_json(&payload)
         .map_err(|err| {
-            dbg!(err);
+            dbg!("Auth Err: ", err);
             ServiceError::InternalServerError
         })
         .and_then(|mut resp| {
-            dbg!(&resp);
             resp.json()
-                .and_then(|body: CreateUserResponse| {
-                    println!("==== JSON RESPONSE ====");
-                    println!("{:?}", body);
-                    Ok(body.uuid)
-                })
+                .and_then(|body: CreateUserResponse| Ok(body.uuid))
                 .map_err(|err| {
-                    dbg!(err);
+                    dbg!("Something else: ", err);
                     ServiceError::InternalServerError
                 })
         })
-        .map_err(|err| {
-            dbg!(err);
-            ServiceError::InternalServerError
-        })
-        .wait()
 }

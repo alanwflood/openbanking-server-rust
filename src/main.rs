@@ -11,7 +11,7 @@ mod yapily;
 
 use crate::db::establish_connection_pool;
 use actix_redis::RedisSession;
-use actix_web::{middleware, web, App, HttpServer};
+use actix_web::{client::Client, middleware, web, App, HttpServer};
 use dotenv::dotenv;
 use listenfd::ListenFd;
 use std::env;
@@ -33,12 +33,13 @@ fn main() {
     let mut server = HttpServer::new(move || {
         App::new()
             .data(pool.clone())
+            .data(Client::new())
             .wrap(RedisSession::new("127.0.0.1:6379", &[0; 32]).cookie_name("authorization"))
             .wrap(middleware::Logger::default())
             .data(web::JsonConfig::default().limit(4096))
             .service(
                 web::scope("/api/v1/")
-                    .service(routes::user_register)
+                    .route("/register", web::post().to_async(routes::user_register))
                     .service(routes::user_login),
             )
     });

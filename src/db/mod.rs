@@ -34,19 +34,17 @@ pub struct UserData {
     pub last_name: String,
 }
 
-// Create user from JSON Payload
+// Create user
 pub fn create_user(
-    user_data: UserData,
+    user: User,
     pool: web::Data<Pool>,
-) -> Result<User, diesel::result::Error> {
+) -> Result<(User, web::Data<Pool>), diesel::result::Error> {
     use self::schema::users;
     let conn = &pool.get().unwrap();
-    let user = User::from_user_data(user_data).unwrap();
-
     diesel::insert_into(users::table)
         .values(&user)
         .execute(conn)?;
-    Ok(user)
+    Ok((user, pool))
 }
 
 #[derive(Deserialize)]
@@ -70,4 +68,19 @@ pub fn login_user(auth_data: AuthData, pool: web::Data<Pool>) -> Result<User, Se
         }
     }
     Err(ServiceError::Unauthorized)
+}
+
+pub fn set_yapily_id(
+    user: &User,
+    new_yapily_id: String,
+    pool: web::Data<Pool>,
+) -> Result<User, diesel::result::Error> {
+    use self::schema::users::dsl::{users, yapily_id};
+
+    let conn: &PgConnection = &pool.get().unwrap();
+    let user = diesel::update(users.find(user.id))
+        .set(yapily_id.eq(new_yapily_id))
+        .get_result::<User>(conn)
+        .unwrap();
+    Ok(user)
 }
