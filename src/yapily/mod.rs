@@ -43,7 +43,7 @@ struct CreateUserResponse {
 }
 
 pub fn create_user(
-    user: User,
+    user: &User,
     client: web::Data<Client>,
 ) -> impl Future<Item = String, Error = ServiceError> {
     let payload = CreateUserBody {
@@ -66,5 +66,9 @@ pub fn create_user(
                     dbg!("Something else: ", err);
                     ServiceError::InternalServerError
                 })
+        })
+        .map_err(|err| {
+            dbg!("Auth Err: ", err);
+            ServiceError::InternalServerError
         })
 }

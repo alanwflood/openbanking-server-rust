@@ -39,7 +39,7 @@ fn main() {
             .data(web::JsonConfig::default().limit(4096))
             .service(
                 web::scope("/api/v1/")
-                    .route("/register", web::post().to_async(routes::user_register))
+                    .service(routes::user_register)
                     .service(routes::user_login),
             )
     });

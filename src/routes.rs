@@ -1,38 +1,9 @@
 use crate::db::{create_user, login_user, models::User, AuthData, Pool, UserData};
 use crate::errors::ServiceError;
 use actix_session::Session;
-use actix_web::{client::Client, error::BlockingError, post, web, Error, HttpResponse};
+use actix_web::{client::Client, error::BlockingError, post, web, HttpResponse};
 use futures::Future;
 
-pub fn user_register(
-    user_data: web::Json<UserData>,
-    pool: web::Data<Pool>,
-    client: web::Data<Client>,
-) -> impl Future<Item = HttpResponse, Error = Error> {
-    let user = User::from_user_data(user_data.into_inner());
-
-    web::block(move || create_user(user, pool))
-        .map_err(|_| ServiceError::InternalServerError)
-        .and_then(|(new_user, pool)| crate::yapily::create_user(new_user, client))
-        .map_err(|_| ServiceError::InternalServerError)
-        .map(|yapily_id| match user.set_yapily_id(yapily_id, pool) {
-            Ok(user) => Ok(HttpResponse::Ok().json(user)),
-            Err(_) => Ok(HttpResponse::InternalServerError().into()),
-        })
-}
-
-// #[post("/regiser")]
-// pub fn user_register(
-//     user_data: web::Json<UserData>,
-//     pool: web::Data<Pool>,
-// ) -> impl Future<Item = HttpResponse, Error = Error> {
-//     let user = User::from_user_data(user_data.into_inner())
-//     web::block(move || create_user(user_data.into_inner(), pool)).then(|res| match res {
-//         Ok(user) => Ok(HttpResponse::Ok().json(user)),
-//         Err(_) => Ok(HttpResponse::InternalServerError().into()),
-//     })
-// }
-//
 #[post("/login")]
 pub fn user_login(
     auth_data: web::Json<AuthData>,
@@ -56,23 +27,29 @@ pub fn user_login(
     )
 }
 
-// pub fn yapily_test(
-//     pool: web::Data<Pool>,
-//     client: web::Data<Client>,
-// ) -> impl Future<Item = HttpResponse, Error = ServiceError> {
-//     let user = UserData {
-//         email: "alanwflood@gmail.com".to_string(),
-//         first_name: "Alan".to_string(),
-//         last_name: "Flood".to_string(),
-//         password: "Fluffykins".to_string(),
-//     };
-//
-//     let new_user = User::from_user_data(user);
-//
-//     crate::yapily::create_user(new_user, client).and_then(|user| {
-//         web::block(move || create_user(user, pool)).then(|res| match res {
-//             Ok(user) => Ok(HttpResponse::Ok().json(user)),
-//             Err(_) => Ok(HttpResponse::InternalServerError().into()),
-//         })
-//     })
-// }
+#[post("/register")]
+pub fn user_register(
+    user_data: web::Json<UserData>,
+    pool: web::Data<Pool>,
+    client: web::Data<Client>,
+) -> impl Future<Item = HttpResponse, Error = ServiceError> {
+    let mut new_user = User::from_user_data(user_data.into_inner());
+    let conn = pool.get().unwrap();
+    let conn2 = pool.clone().get().unwrap();
+
+    web::block(move || create_user(new_user, &conn))
+        .then(|res| match res {
+            Ok(user) => Ok(user),
+            Err(_) => panic!("Error Creating User"),
+        })
+        .and_then(|user| {
+            crate::yapily::create_user(&user, client).and_then(|id| match crate::db::set_yapily_id(
+                &user,
+                id,
+                &pool.clone().get().unwrap(),
+            ) {
+                Ok(user) => Ok(HttpResponse::Ok().json(user)),
+                Err(_) => Ok(HttpResponse::InternalServerError().into()),
+            })
+        })
+}

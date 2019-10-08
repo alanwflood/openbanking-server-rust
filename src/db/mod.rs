@@ -35,16 +35,12 @@ pub struct UserData {
 }
 
 // Create user
-pub fn create_user(
-    user: User,
-    pool: web::Data<Pool>,
-) -> Result<(User, web::Data<Pool>), diesel::result::Error> {
+pub fn create_user(user: User, conn: &PgConnection) -> Result<User, diesel::result::Error> {
     use self::schema::users;
-    let conn = &pool.get().unwrap();
     diesel::insert_into(users::table)
         .values(&user)
         .execute(conn)?;
-    Ok((user, pool))
+    Ok(user)
 }
 
 #[derive(Deserialize)]
@@ -73,14 +69,12 @@ pub fn login_user(auth_data: AuthData, pool: web::Data<Pool>) -> Result<User, Se
 pub fn set_yapily_id(
     user: &User,
     new_yapily_id: String,
-    pool: web::Data<Pool>,
+    conn: &PgConnection,
 ) -> Result<User, diesel::result::Error> {
     use self::schema::users::dsl::{users, yapily_id};
 
-    let conn: &PgConnection = &pool.get().unwrap();
     let user = diesel::update(users.find(user.id))
         .set(yapily_id.eq(new_yapily_id))
-        .get_result::<User>(conn)
-        .unwrap();
+        .get_result::<User>(conn)?;
     Ok(user)
 }

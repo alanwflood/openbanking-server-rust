@@ -1,8 +1,7 @@
 use super::schema::*;
-use crate::db::{Pool, UserData};
+use crate::db::UserData;
 use crate::errors;
 
-use actix_web::web;
 use argonautica::{Hasher, Verifier};
 use chrono;
 use serde_derive::Serialize;
@@ -64,9 +63,5 @@ impl User {
             created_at: chrono::Local::now().naive_local(),
             yapily_id: "".to_string(),
         }
-    }
-
-    pub fn set_yapily_id(&self, yapily_id: String, pool: web::Data<Pool>) -> Self {
-        crate::db::set_yapily_id(self, yapily_id, pool).unwrap()
     }
 }
