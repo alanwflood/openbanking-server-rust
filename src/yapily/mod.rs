@@ -43,9 +43,9 @@ struct CreateUserResponse {
 }
 
 pub fn create_user(
-    user: &User,
+    mut user: User,
     client: web::Data<Client>,
-) -> impl Future<Item = String, Error = ServiceError> {
+) -> impl Future<Item = User, Error = ServiceError> {
     let payload = CreateUserBody {
         user_id: user.id.to_string(),
         reference_id: user.email.clone(),
@@ -61,7 +61,10 @@ pub fn create_user(
         })
         .and_then(|mut resp| {
             resp.json()
-                .and_then(|body: CreateUserResponse| Ok(body.uuid))
+                .and_then(|body: CreateUserResponse| {
+                    user.yapily_id = body.uuid;
+                    Ok(user)
+                })
                 .map_err(|err| {
                     dbg!("Something else: ", err);
                     ServiceError::InternalServerError

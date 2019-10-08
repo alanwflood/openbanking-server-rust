@@ -34,22 +34,18 @@ pub fn user_register(
     client: web::Data<Client>,
 ) -> impl Future<Item = HttpResponse, Error = ServiceError> {
     let mut new_user = User::from_user_data(user_data.into_inner());
-    let conn = pool.get().unwrap();
-    let conn2 = pool.clone().get().unwrap();
 
-    web::block(move || create_user(new_user, &conn))
+    web::block(move || create_user(new_user, pool))
         .then(|res| match res {
-            Ok(user) => Ok(user),
+            Ok((user, conn)) => Ok((user, conn)),
             Err(_) => panic!("Error Creating User"),
         })
-        .and_then(|user| {
-            crate::yapily::create_user(&user, client).and_then(|id| match crate::db::set_yapily_id(
-                &user,
-                id,
-                &pool.clone().get().unwrap(),
-            ) {
-                Ok(user) => Ok(HttpResponse::Ok().json(user)),
-                Err(_) => Ok(HttpResponse::InternalServerError().into()),
+        .and_then(|(user, pool)| {
+            crate::yapily::create_user(user, client).and_then(|user| {
+                match crate::db::update_yapily_id(&user, pool) {
+                    Ok(user) => Ok(HttpResponse::Ok().json(user)),
+                    Err(_) => Ok(HttpResponse::InternalServerError().into()),
+                }
             })
         })
 }
