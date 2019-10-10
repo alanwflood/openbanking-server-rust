@@ -61,6 +61,10 @@ pub fn forgotten_password(
     })
 }
 
+pub fn reset_password(
+    
+)
+
 fn update_yapily_credentials(
     user: User,
     pool: web::Data<db::Pool>,
