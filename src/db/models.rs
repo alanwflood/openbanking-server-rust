@@ -1,9 +1,12 @@
 use super::schema::*;
-use crate::db::UserData;
+use crate::db::{Pool, UserRegisterReq};
 use crate::errors;
+use crate::errors::ServiceError;
 
+use actix_web::web;
 use argonautica::{Hasher, Verifier};
 use chrono;
+use diesel::{prelude::*, PgConnection};
 use serde_derive::Serialize;
 use uuid;
 
@@ -12,7 +15,7 @@ lazy_static::lazy_static! {
         std::env::var("SECRET_KEY").unwrap_or_else(|_| "1234".repeat(8));
 }
 
-pub fn hash_password(password: &str) -> Result<String, errors::ServiceError> {
+fn hash_password(password: &str) -> Result<String, errors::ServiceError> {
     Hasher::default()
         .with_password(password)
         .with_secret_key(SECRET_KEY.as_str())
@@ -20,18 +23,6 @@ pub fn hash_password(password: &str) -> Result<String, errors::ServiceError> {
         .map_err(|err| {
             dbg!(err);
             errors::ServiceError::InternalServerError
-        })
-}
-
-pub fn verify_password(hash: &str, password: &str) -> Result<bool, errors::ServiceError> {
-    Verifier::default()
-        .with_hash(hash)
-        .with_password(password)
-        .with_secret_key(SECRET_KEY.as_str())
-        .verify()
-        .map_err(|err| {
-            dbg!(err);
-            errors::ServiceError::Unauthorized
         })
 }
 
@@ -51,7 +42,7 @@ pub struct User {
 }
 
 impl User {
-    pub fn from_user_data(user_data: UserData) -> Self {
+    pub fn from_user_data(user_data: UserRegisterReq) -> Self {
         let id = uuid::Uuid::new_v4();
 
         User {
@@ -63,5 +54,24 @@ impl User {
             created_at: chrono::Local::now().naive_local(),
             yapily_id: "".to_string(),
         }
+    }
+
+    pub fn find_by_email(user_email: String, pool: &web::Data<Pool>) -> Result<User, ServiceError> {
+        use super::schema::users::dsl::{email, users};
+        let conn: &PgConnection = &pool.get().unwrap();
+        let user = users.filter(email.eq(&user_email)).first::<User>(conn)?;
+        Ok(user.into())
+    }
+
+    pub fn verify_password(&self, password: &str) -> Result<bool, errors::ServiceError> {
+        Verifier::default()
+            .with_hash(&self.hash)
+            .with_password(password)
+            .with_secret_key(SECRET_KEY.as_str())
+            .verify()
+            .map_err(|err| {
+                dbg!(err);
+                errors::ServiceError::Unauthorized
+            })
     }
 }

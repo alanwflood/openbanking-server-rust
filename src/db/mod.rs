@@ -1,4 +1,4 @@
-use self::models::{verify_password, User};
+use self::models::User;
 use crate::errors::ServiceError;
 use actix_web::web;
 use diesel::{
@@ -27,7 +27,7 @@ pub fn establish_connection_pool() -> Pool {
 
 // JSON Payload shape for User Registration
 #[derive(Deserialize)]
-pub struct UserData {
+pub struct UserRegisterReq {
     pub email: String,
     pub password: String,
     pub first_name: String,
@@ -48,23 +48,20 @@ pub fn create_user(
 }
 
 #[derive(Deserialize)]
-pub struct AuthData {
+pub struct UserAuthReq {
     pub email: String,
     pub password: String,
 }
 
-pub fn login_user(auth_data: AuthData, pool: web::Data<Pool>) -> Result<User, ServiceError> {
-    use self::schema::users::dsl::{email, users};
-    let conn: &PgConnection = &pool.get().unwrap();
-    let mut items = users
-        .filter(email.eq(&auth_data.email))
-        .load::<User>(conn)?;
+pub fn login_user(
+    auth_data: UserAuthReq,
+    pool: web::Data<Pool>,
+) -> Result<(User, web::Data<Pool>), ServiceError> {
+    let user = User::find_by_email(auth_data.email, &pool)?;
 
-    if let Some(user) = items.pop() {
-        if let Ok(matching) = verify_password(&user.hash, &auth_data.password) {
-            if matching {
-                return Ok(user.into()); // convert into slimUser
-            }
+    if let Ok(matching) = user.verify_password(&auth_data.password) {
+        if matching {
+            return Ok((user.into(), pool)); // convert into slimUser
         }
     }
     Err(ServiceError::Unauthorized)
@@ -78,4 +75,9 @@ pub fn update_yapily_id(user: &User, pool: web::Data<Pool>) -> Result<User, dies
         .get_result::<User>(conn)
         .unwrap();
     Ok(user)
+}
+
+#[derive(Deserialize)]
+pub struct ForgottenPasswordReq {
+    pub email: String,
 }

@@ -12,9 +12,9 @@ static YAPILY_URL: &str = "https://api.yapily.com";
 lazy_static::lazy_static! {
     pub static ref AUTH_TOKEN: String = {
         let app_key =
-            env::var("YAPILY_APP_KEY").unwrap_or_else(|err| "MISSING APP KEY".to_string());
+            env::var("YAPILY_APP_KEY").unwrap();
         let secret_key =
-            env::var("YAPILY_APP_SECRET").unwrap_or_else(|err| "MISSING SECRET KEY".to_string());
+            env::var("YAPILY_APP_SECRET").unwrap();
         dbg!(&app_key);
         dbg!(&secret_key);
 
@@ -56,22 +56,17 @@ pub fn create_user(
         .header("Authorization", AUTH_TOKEN.as_str())
         .send_json(&payload)
         .map_err(|err| {
-            dbg!("Auth Err: ", err);
+            dbg!("Error Adding user to Yapily: ", err);
             ServiceError::InternalServerError
         })
         .and_then(|mut resp| {
-            resp.json()
-                .and_then(|body: CreateUserResponse| {
-                    user.yapily_id = body.uuid;
-                    Ok(user)
-                })
-                .map_err(|err| {
-                    dbg!("Something else: ", err);
-                    ServiceError::InternalServerError
-                })
+            resp.json().map_err(|err| {
+                dbg!("Error parsing reponse from Yapily: ", err);
+                ServiceError::InternalServerError
+            })
         })
-        .map_err(|err| {
-            dbg!("Auth Err: ", err);
-            ServiceError::InternalServerError
+        .and_then(|body: CreateUserResponse| {
+            user.yapily_id = body.uuid;
+            Ok(user)
         })
 }
