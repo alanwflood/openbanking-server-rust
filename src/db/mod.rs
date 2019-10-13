@@ -81,3 +81,9 @@ pub fn update_yapily_id(user: &User, pool: web::Data<Pool>) -> Result<User, dies
 pub struct ForgottenPasswordReq {
     pub email: String,
 }
+
+#[derive(Deserialize)]
+pub struct ResetPasswordReq {
+    pub reset_token: uuid::Uuid,
+    pub new_password: String,
+}

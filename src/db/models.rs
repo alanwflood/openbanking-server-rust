@@ -63,6 +63,20 @@ impl User {
         Ok(user.into())
     }
 
+    pub fn reset_password(
+        user_id: uuid::Uuid,
+        new_password: &str,
+        pool: &web::Data<Pool>,
+    ) -> Result<User, ServiceError> {
+        use super::schema::users::dsl::{hash, users};
+        let conn: &PgConnection = &pool.get().unwrap();
+        let new_hash = hash_password(new_password)?;
+        let user = diesel::update(users.find(user_id))
+            .set(hash.eq(new_hash))
+            .get_result::<User>(conn)?;
+        Ok(user)
+    }
+
     pub fn verify_password(&self, password: &str) -> Result<bool, errors::ServiceError> {
         Verifier::default()
             .with_hash(&self.hash)

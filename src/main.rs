@@ -2,10 +2,13 @@
 extern crate diesel;
 extern crate dotenv;
 extern crate lazy_static;
+extern crate lettre;
+extern crate lettre_email;
 
 #[macro_use]
 mod errors;
 mod db;
+mod mail;
 mod routes;
 mod yapily;
 
@@ -40,7 +43,9 @@ fn main() {
             .service(
                 web::scope("/api/v1/")
                     .service(routes::user_register)
-                    .service(routes::user_login),
+                    .service(routes::user_login)
+                    .service(routes::forgotten_password)
+                    .service(routes::reset_password),
             )
     });
 

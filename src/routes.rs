@@ -44,26 +44,49 @@ pub fn user_register(
         .and_then(|(user, pool)| update_yapily_credentials(user, pool, client))
 }
 
-#[post("/password")]
+#[post("/forgot")]
 pub fn forgotten_password(
     request: web::Json<ForgottenPasswordReq>,
     pool: web::Data<db::Pool>,
     session: Session,
 ) -> impl Future<Item = HttpResponse, Error = ServiceError> {
     web::block(move || User::find_by_email(request.into_inner().email, &pool)).then(move |res| {
+        dbg!(&res);
+        let id = uuid::Uuid::new_v4().to_string();
         match res {
             Ok(user) => session
-                .set(&uuid::Uuid::new_v4().to_string(), user.id)
-                .and_then(|_| return Ok(HttpResponse::Ok().json(true)))
+                .set(&id, user.id)
+                .and_then(|_| Ok(HttpResponse::Ok().json(id)))
                 .or_else(|_| Err(ServiceError::InternalServerError)),
             Err(_) => Ok(HttpResponse::InternalServerError().into()),
         }
     })
 }
 
-pub fn reset_password(
-    
-)
+#[post("/forgot/reset")]
+pub fn reset_password<'a>(
+    request: web::Json<db::ResetPasswordReq>,
+    pool: web::Data<db::Pool>,
+    session: Session,
+) -> impl Future<Item = HttpResponse, Error = ServiceError> {
+    let token = request.reset_token.to_string();
+    let retrieved_id: String = session
+        .get(&token)
+        .unwrap()
+        .ok_or(ServiceError::Unauthorized)
+        .unwrap();
+    web::block(move || {
+        let user_id = uuid::Uuid::parse_str(&retrieved_id).unwrap();
+        User::reset_password(user_id, &request.new_password, &pool)
+    })
+    .then(move |res| match res {
+        Ok(_user) => {
+            session.remove(&token);
+            Ok(HttpResponse::Ok().json(true))
+        }
+        Err(_) => Ok(HttpResponse::InternalServerError().into()),
+    })
+}
 
 fn update_yapily_credentials(
     user: User,
