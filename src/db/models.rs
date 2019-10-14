@@ -56,6 +56,10 @@ impl User {
         }
     }
 
+    pub fn full_name(&self) -> String {
+        format!("{} {}", self.first_name, self.last_name)
+    }
+
     pub fn find_by_email(user_email: String, pool: &web::Data<Pool>) -> Result<User, ServiceError> {
         use super::schema::users::dsl::{email, users};
         let conn: &PgConnection = &pool.get().unwrap();

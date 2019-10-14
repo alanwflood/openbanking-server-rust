@@ -1,50 +1,41 @@
-use lettre::smtp::authentication::{Credentials, Mechanism};
-use lettre::smtp::extension::ClientId;
-use lettre::smtp::ConnectionReuseParameters;
-use lettre::{EmailAddress, Envelope, SendableEmail, SmtpClient, Transport};
-use std::env;
+use crate::db::models::User;
+use crate::errors;
+use actix_web::web;
+use lettre::{ClientSecurity, SmtpClient, SmtpConnectionManager, Transport};
+use lettre_email::Email;
+use r2d2;
 
-pub fn send_test_mail(recipient_email_address: String) {
-    let email = SendableEmail::new(
-        Envelope::new(
-            Some(EmailAddress::new(recipient_email_address).unwrap()),
-            vec![EmailAddress::new("root@localhost".to_string()).unwrap()],
-        )
-        .unwrap(),
-        "id1".to_string(),
-        "Hello world".to_string().into_bytes(),
+pub type Pool = r2d2::Pool<SmtpConnectionManager>;
+
+pub fn establish_mailer_pool() -> Pool {
+    let client = SmtpClient::new(("localhost", 1025), ClientSecurity::None).unwrap();
+    let manager = SmtpConnectionManager::new(client).unwrap();
+    r2d2::Pool::builder().build(manager).unwrap()
+}
+
+pub fn send_password_reset_token(
+    user: User,
+    token: uuid::Uuid,
+    pool: web::Data<Pool>,
+) -> Result<(), errors::ServiceError> {
+    let html = format!(
+        "<h2>Hi<br><br>Your password reset token is: {}</h2>",
+        token.to_string()
     );
+    let text = format!("Hi Your password reset token is: {}", token.to_string());
+    let email = Email::builder()
+        // Addresses can be specified by the tuple (email, alias)
+        .to((&user.email, &user.full_name()))
+        // ... or by an address only
+        .from("user@example.com")
+        .subject("Hi, Hello world")
+        .alternative(html, text)
+        .build()
+        .unwrap();
 
-    let mut mailer = SmtpClient::new_simple("smtp.ethereal.email")
-        .unwrap()
-        .credentials(Credentials::new(
-            "javonte.breitenberg7@ethereal.email".to_string(),
-            "mcqMDPG8Eygsd2vdSZ".to_string(),
-        ))
-        // Enable SMTPUTF8 if the server supports it
-        .smtp_utf8(true)
-        // Configure expected authentication mechanism
-        .authentication_mechanism(Mechanism::Plain)
-        // Enable connection reuse
-        .connection_reuse(ConnectionReuseParameters::ReuseUnlimited)
-        .transport();
-    // Send the email
-    let result = mailer.send(email);
-
-    if result.is_ok() {
-        println!("Email sent");
-    } else {
-        println!("Could not send email: {:?}", result);
+    let mut mailer = pool.get().unwrap();
+    match mailer.send(email.into()) {
+        Ok(_) => Ok(()),
+        Err(_) => Err(errors::ServiceError::EmailServerError),
     }
-
-    assert!(result.is_ok());
-
-    // const transporter = nodemailer.createTransport({
-    // host: 'smtp.ethereal.email',
-    // port: 587,
-    // auth: {
-    //     user: 'javonte.breitenberg7@ethereal.email',
-    //     pass: 'mcqMDPG8Eygsd2vdSZ'
-    // }
-    // });
 }

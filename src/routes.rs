@@ -1,5 +1,6 @@
 use crate::db::{self, models::User, ForgottenPasswordReq, UserAuthReq, UserRegisterReq};
 use crate::errors::ServiceError;
+use crate::mail;
 use crate::yapily;
 use actix_session::Session;
 use actix_web::{client::Client, error::BlockingError, post, web, HttpResponse};
@@ -17,7 +18,7 @@ pub fn user_login(
                 .set("user.id", &user.id)
                 .and_then(|_| {
                     session.renew();
-                    return Ok(HttpResponse::Ok().json(true));
+                    return Ok(HttpResponse::Ok().json(&user.yapily_id));
                 })
                 .or_else(|_| Err(ServiceError::InternalServerError)),
             Err(err) => match err {
@@ -48,15 +49,19 @@ pub fn user_register(
 pub fn forgotten_password(
     request: web::Json<ForgottenPasswordReq>,
     pool: web::Data<db::Pool>,
+    mailer: web::Data<mail::Pool>,
     session: Session,
 ) -> impl Future<Item = HttpResponse, Error = ServiceError> {
     web::block(move || User::find_by_email(request.into_inner().email, &pool)).then(move |res| {
         dbg!(&res);
-        let id = uuid::Uuid::new_v4().to_string();
+        let id = uuid::Uuid::new_v4();
         match res {
             Ok(user) => session
-                .set(&id, user.id)
-                .and_then(|_| Ok(HttpResponse::Ok().json(id)))
+                .set(&id.to_string(), user.id)
+                .and_then(|_| {
+                    mail::send_password_reset_token(user, id, mailer)?;
+                    Ok(HttpResponse::Ok().json(id))
+                })
                 .or_else(|_| Err(ServiceError::InternalServerError)),
             Err(_) => Ok(HttpResponse::InternalServerError().into()),
         }
@@ -70,13 +75,13 @@ pub fn reset_password<'a>(
     session: Session,
 ) -> impl Future<Item = HttpResponse, Error = ServiceError> {
     let token = request.reset_token.to_string();
-    let retrieved_id: String = session
+    let retrieved_id: Result<String, ServiceError> = session
         .get(&token)
         .unwrap()
-        .ok_or(ServiceError::Unauthorized)
-        .unwrap();
+        .ok_or(ServiceError::Unauthorized);
     web::block(move || {
-        let user_id = uuid::Uuid::parse_str(&retrieved_id).unwrap();
+        let id = retrieved_id.unwrap();
+        let user_id = uuid::Uuid::parse_str(&id).unwrap();
         User::reset_password(user_id, &request.new_password, &pool)
     })
     .then(move |res| match res {
@@ -84,7 +89,7 @@ pub fn reset_password<'a>(
             session.remove(&token);
             Ok(HttpResponse::Ok().json(true))
         }
-        Err(_) => Ok(HttpResponse::InternalServerError().into()),
+        Err(_err) => Ok(HttpResponse::InternalServerError().into()),
     })
 }
 

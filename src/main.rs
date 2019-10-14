@@ -12,7 +12,6 @@ mod mail;
 mod routes;
 mod yapily;
 
-use crate::db::establish_connection_pool;
 use actix_redis::RedisSession;
 use actix_web::{client::Client, middleware, web, App, HttpServer};
 use dotenv::dotenv;
@@ -30,12 +29,14 @@ fn main() {
     env::set_var("RUST_LOG", "actix_web=info,actix_server=info");
     env_logger::init();
 
-    let pool = establish_connection_pool(); // Create Database connection pool
+    let pool = db::establish_connection_pool(); // Create Database connection pool
+    let mailer = mail::establish_mailer_pool(); // Create Mailer connection pool
     let mut listenfd = ListenFd::from_env(); // Used for live reloading
 
     let mut server = HttpServer::new(move || {
         App::new()
             .data(pool.clone())
+            .data(mailer.clone())
             .data(Client::new())
             .wrap(RedisSession::new("127.0.0.1:6379", &[0; 32]).cookie_name("authorization"))
             .wrap(middleware::Logger::default())
@@ -45,7 +46,7 @@ fn main() {
                     .service(routes::user_register)
                     .service(routes::user_login)
                     .service(routes::forgotten_password)
-                    .service(routes::reset_password),
+                    .service(routes::reset_password), // .service(routes::test_mail),
             )
     });
 

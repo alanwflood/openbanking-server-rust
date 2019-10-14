@@ -1,11 +1,13 @@
 use actix_web::{error::ResponseError, HttpResponse};
 use diesel::result::{DatabaseErrorKind, Error as DBError};
+use lettre::smtp::error::Error as EmailError;
 use std::convert::From;
 use std::fmt;
 use uuid::parser::ParseError;
 
 #[derive(Debug)]
 pub enum ServiceError {
+    EmailServerError,
     InternalServerError,
     BadRequest(String),
     Unauthorized,
@@ -15,6 +17,7 @@ pub enum ServiceError {
 impl fmt::Display for ServiceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match &*self {
+            ServiceError::EmailServerError => write!(f, "Email Server Error"),
             ServiceError::InternalServerError => write!(f, "Internal Server Error"),
             ServiceError::BadRequest(error) => write!(f, "Bad Request {}", error),
             ServiceError::Unauthorized => write!(f, "Unauthorized"),
@@ -26,6 +29,9 @@ impl fmt::Display for ServiceError {
 impl ResponseError for ServiceError {
     fn error_response(&self) -> HttpResponse {
         match self {
+            ServiceError::EmailServerError => {
+                HttpResponse::InternalServerError().json("Internal Server Error, Please try later")
+            }
             ServiceError::InternalServerError => {
                 HttpResponse::InternalServerError().json("Internal Server Error, Please try later")
             }
@@ -57,5 +63,11 @@ impl From<DBError> for ServiceError {
             }
             _ => ServiceError::InternalServerError,
         }
+    }
+}
+
+impl From<EmailError> for ServiceError {
+    fn from(_: EmailError) -> ServiceError {
+        ServiceError::EmailServerError
     }
 }
