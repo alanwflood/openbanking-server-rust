@@ -46,7 +46,8 @@ fn main() {
                     .service(routes::user_register)
                     .service(routes::user_login)
                     .service(routes::forgotten_password)
-                    .service(routes::reset_password), // .service(routes::test_mail),
+                    .service(routes::reset_password)
+                    .service(routes::user_consents),
             )
     });
 

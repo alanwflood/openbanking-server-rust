@@ -3,7 +3,7 @@ use crate::errors::ServiceError;
 use crate::mail;
 use crate::yapily;
 use actix_session::Session;
-use actix_web::{client::Client, error::BlockingError, post, web, HttpResponse};
+use actix_web::{client::Client, error::BlockingError, get, post, web, HttpResponse};
 use futures::Future;
 
 #[post("/login")]
@@ -53,16 +53,17 @@ pub fn forgotten_password(
     session: Session,
 ) -> impl Future<Item = HttpResponse, Error = ServiceError> {
     web::block(move || User::find_by_email(request.into_inner().email, &pool)).then(move |res| {
-        dbg!(&res);
-        let id = uuid::Uuid::new_v4();
         match res {
-            Ok(user) => session
-                .set(&id.to_string(), user.id)
-                .and_then(|_| {
-                    mail::send_password_reset_token(user, id, mailer)?;
-                    Ok(HttpResponse::Ok().json(id))
-                })
-                .or_else(|_| Err(ServiceError::InternalServerError)),
+            Ok(user) => {
+                let id = uuid::Uuid::new_v4();
+                session
+                    .set(&id.to_string(), user.id)
+                    .and_then(|_| {
+                        mail::send_password_reset_token(user, id, mailer)?;
+                        Ok(HttpResponse::Ok().json(id))
+                    })
+                    .or_else(|_| Err(ServiceError::InternalServerError))
+            }
             Err(_) => Ok(HttpResponse::InternalServerError().into()),
         }
     })
@@ -89,6 +90,20 @@ pub fn reset_password<'a>(
             session.remove(&token);
             Ok(HttpResponse::Ok().json(true))
         }
+        Err(_err) => Ok(HttpResponse::InternalServerError().into()),
+    })
+}
+
+#[get("/consents/{id}")]
+pub fn user_consents(
+    user_id: web::Path<String>,
+    pool: web::Data<db::Pool>,
+    client: web::Data<Client>,
+) -> impl Future<Item = HttpResponse, Error = ServiceError> {
+    let id = uuid::Uuid::parse_str(&user_id).unwrap();
+    let user = User::find_by_id(id, &pool).unwrap();
+    yapily::get_user_consents(user, client).then(|res| match res {
+        Ok(consents) => Ok(HttpResponse::Ok().json(consents)),
         Err(_err) => Ok(HttpResponse::InternalServerError().into()),
     })
 }

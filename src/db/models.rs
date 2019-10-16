@@ -67,6 +67,13 @@ impl User {
         Ok(user.into())
     }
 
+    pub fn find_by_id(user_id: uuid::Uuid, pool: &web::Data<Pool>) -> Result<User, ServiceError> {
+        use super::schema::users::dsl::users;
+        let conn: &PgConnection = &pool.get().unwrap();
+        let user = users.find(user_id).get_result::<User>(conn)?;
+        Ok(user.into())
+    }
+
     pub fn reset_password(
         user_id: uuid::Uuid,
         new_password: &str,

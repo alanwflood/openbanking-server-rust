@@ -70,3 +70,37 @@ pub fn create_user(
             Ok(user)
         })
 }
+
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UserConsents {
+    id: String,
+    user_uuid: String,
+    institution_id: String,
+    status: String,
+    consent_token: String,
+}
+
+pub fn get_user_consents(
+    user: User,
+    client: web::Data<Client>,
+) -> impl Future<Item = Vec<UserConsents>, Error = ServiceError> {
+    client
+        .get(format!(
+            "{}{}{}{}",
+            YAPILY_URL, "/users", user.yapily_id, "/consents"
+        ))
+        .header("Authorization", AUTH_TOKEN.as_str())
+        .send()
+        .map_err(|err| {
+            dbg!("Error user getting user consents from Yapily: ", err);
+            ServiceError::InternalServerError
+        })
+        .and_then(|mut resp| {
+            resp.json().map_err(|err| {
+                dbg!("Error parsing reponse from Yapily: ", err);
+                ServiceError::InternalServerError
+            })
+        })
+        .and_then(|body: Vec<UserConsents>| Ok(body))
+}

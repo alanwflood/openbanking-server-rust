@@ -24,11 +24,9 @@ pub fn send_password_reset_token(
     );
     let text = format!("Hi Your password reset token is: {}", token.to_string());
     let email = Email::builder()
-        // Addresses can be specified by the tuple (email, alias)
         .to((&user.email, &user.full_name()))
-        // ... or by an address only
-        .from("user@example.com")
-        .subject("Hi, Hello world")
+        .from("no-reply@sumi.com")
+        .subject(format!("Password reset request for {}", &user.email))
         .alternative(html, text)
         .build()
         .unwrap();
